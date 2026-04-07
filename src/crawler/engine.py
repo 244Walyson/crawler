@@ -9,6 +9,7 @@ import httpx
 
 from src.config.logging import logger
 from src.config.settings import settings
+from src.crawler.robots import RobotsCache
 from src.crawler.scheduler import AdaptiveScheduler
 from src.models.raw_document import RawWebDocument
 
@@ -34,6 +35,7 @@ class CrawlerEngine:
                 max_keepalive_connections=settings.MAX_KEEPALIVE,
             ),
         )
+        self.robots = RobotsCache(self.client)
         self.pages_collected = 0
         self.errors = 0
         self.workers_status: dict[int, str] = {}
@@ -61,6 +63,10 @@ class CrawlerEngine:
 
                     if url is None or self._stop_event.is_set():
                         break
+
+                    if not await self.robots.is_allowed(url):
+                        logger.debug("robots_blocked", url=url)
+                        continue
 
                     self.scheduler.set_busy()
                     try:
