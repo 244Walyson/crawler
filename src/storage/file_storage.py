@@ -21,24 +21,32 @@ class FileStorage:
         return self._file
 
     async def save(self, event: Any) -> None:
-        to_flush = []
+        to_flush_items = []
         async with self._lock:
             self.buffer.append(event)
             if len(self.buffer) >= settings.BUFFER_SIZE:
-                to_flush = [e.model_dump_json() for e in self.buffer]
+                to_flush_items = self.buffer
                 self.buffer = []
-        
-        if to_flush:
+
+        if to_flush_items:
+            to_flush = await anyio.to_thread.run_sync(
+                lambda items: [e.model_dump_json() for e in items],
+                to_flush_items
+            )
             await self._write_to_disk(to_flush)
 
     async def flush(self) -> None:
-        to_flush = []
+        to_flush_items = []
         async with self._lock:
             if self.buffer:
-                to_flush = [e.model_dump_json() for e in self.buffer]
+                to_flush_items = self.buffer
                 self.buffer = []
-        
-        if to_flush:
+
+        if to_flush_items:
+            to_flush = await anyio.to_thread.run_sync(
+                lambda items: [e.model_dump_json() for e in items],
+                to_flush_items
+            )
             await self._write_to_disk(to_flush)
         
         if self._file:
@@ -57,5 +65,5 @@ class FileStorage:
 
     async def close(self) -> None:
         if self._file:
-            await self._file.close()
+            await self._file.aclose()
             self._file = None
