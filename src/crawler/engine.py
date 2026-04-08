@@ -1,8 +1,6 @@
 import asyncio
-import re
 from datetime import datetime
-from typing import Any, Dict, List, Protocol, Set
-from urllib.parse import urljoin
+from typing import Any, List, Protocol, Tuple
 
 import anyio
 import httpx
@@ -20,8 +18,13 @@ class DataStorage(Protocol):
     async def close(self) -> None: ...
 
 
+class LinkExtractorProtocol(Protocol):
+    def extract_links(self, html: str, base_url: str) -> List[Tuple[int, str]]: ...
+
+
 class CrawlerEngine:
-    def __init__(self, storage: DataStorage) -> None:
+    def __init__(self, extractor: LinkExtractorProtocol, storage: DataStorage) -> None:
+        self.extractor = extractor
         self.storage = storage
         self.scheduler = AdaptiveScheduler()
 
@@ -53,7 +56,6 @@ class CrawlerEngine:
         }
 
     async def worker(self, worker_id: int) -> None:
-        href_re = re.compile(r'href=["\']([^"\']+)["\']', re.IGNORECASE)
         self.workers_status[worker_id] = "Starting..."
         try:
             while not self._stop_event.is_set():
@@ -95,12 +97,10 @@ class CrawlerEngine:
                         await self.storage.save(doc)
 
                         self.workers_status[worker_id] = "Extracting..."
-                        for match in href_re.finditer(html_text):
-                            raw_url = match.group(1)
-                            if raw_url.startswith(("javascript:", "mailto:", "tel:", "#")):
-                                continue
-                            full_url = urljoin(resp_url, raw_url)
-                            await self.scheduler.add_task(full_url, priority=10)
+                        new_urls = self.extractor.extract_links(html_text, resp_url)
+                        for priority, link in new_urls:
+                            if await self.robots.is_allowed(link):
+                                await self.scheduler.add_task(link, priority=priority)
 
                     except Exception as e:
                         self.errors += 1
