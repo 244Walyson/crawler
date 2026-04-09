@@ -12,7 +12,7 @@ class Settings(BaseSettings):
         "https://www.soccervital.com/",
         "https://www.xscores.com/soccer"
     ]
-    
+
     # Crawler Constraints
     MAX_PAGES: int = 50000
     CONCURRENCY_LIMIT: int = 50
@@ -26,11 +26,14 @@ class Settings(BaseSettings):
     BUFFER_SIZE: int = 200
     DNS_CACHE_TTL: int = 3600
 
-
     # Storage
     MONGODB_URI: str = "mongodb://localhost:27017"
     DATABASE_NAME: str = "sports_crawler"
     COLLECTION_NAME: str = "odds_data"
+
+    # Distributed
+    REDIS_URL: str = "redis://localhost:6379"
+    HEADLESS: bool = False
 
 
 settings = Settings()
