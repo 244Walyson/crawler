@@ -1,37 +1,80 @@
-# Crawler de Odds Esportivas
+# Async Sports Odds Crawler
 
-Este projeto é um coletor (crawler) de alto desempenho desenvolvido para a disciplina de Recuperação de Informações na Web e Redes Sociais. O objetivo é coletar e comparar odds de eventos esportivos de diversas fontes.
+A high-performance, asynchronous web crawler designed for efficient sports odds data harvesting. Built with modern Python concurrency primitives, it features a real-time terminal dashboard, adaptive scheduling, and buffered asynchronous storage.
 
-## 1. Proposta do Sistema de RI
+## Features
 
-O sistema visa auxiliar apostadores e analistas a encontrar as melhores oportunidades de apostas em eventos de futebol, consolidando dados de múltiplos provedores em um único local.
+- **High-Concurrency Engine:** Leverages `anyio` and `httpx` for efficient, non-blocking network I/O and worker pool management.
+- **Real-Time Monitoring:** Interactive terminal dashboard powered by `rich`, providing live updates on crawl progress, worker status, and data collection rates.
+- **Adaptive Scheduler:** Intelligent URL prioritization and deduplication to maximize crawling efficiency.
+- **Buffered Async Storage:** High-throughput data persistence to JSONL format using asynchronous file operations.
+- **Configurable Architecture:** Fine-tune performance parameters, concurrency limits, and target scopes via environment variables.
 
-## 2. Descrição do Coletor
+## Project Structure
 
-- **Tipo**: Coletor focado (Focused Crawler) em sites de agregação de odds esportivas.
-- **Propriedades**:
-    - **Assíncrono**: Utiliza `httpx` e `anyio` para realizar múltiplas requisições simultâneas sem bloquear o processo.
-    - **Alta Performance**: O parsing do HTML é feito com `selectolax` (baseado em Lexbor), que é significativamente mais rápido que BeautifulSoup.
-    - **Concorrência**: Suporta múltiplos workers configuráveis via variáveis de ambiente.
-- **Políticas**:
-    - **Escopo**: Limitado aos domínios permitidos (ex: OddsPortal, BetExplorer).
-    - **Polidez**: Delay configurável entre requisições para evitar sobrecarga nos servidores alvo e bloqueios.
-    - **Deduplicação**: Mantém um registro de URLs visitadas e enfileiradas para evitar coletas redundantes.
-- **Critério de Parada**: O crawler para automaticamente ao atingir o limite de páginas configurado (ex: 50.000 páginas para pontuação máxima).
-- **Justificativa**: A escolha de Python com `uv` e bibliotecas assíncronas modernas garante um desenvolvimento rápido, código elegante e performance necessária para escalas de dezenas de milhares de páginas.
+```text
+src/
+├── config/         # Settings and logging configuration
+├── crawler/        # Core engine and scheduling logic
+├── models/         # Data models for extracted documents
+├── parser/         # Link extraction and HTML parsing
+├── storage/        # Async file-based data persistence
+├── ui/             # Terminal-based real-time dashboard
+└── main.py         # Application entry point
+```
 
-## 3. Escala
+## Getting Started
 
-O sistema foi projetado para escalar horizontalmente. Para atingir a meta de 50.000 páginas, basta configurar o `MAX_PAGES` no arquivo `.env` e ajustar a concorrência conforme a capacidade da rede.
+### Prerequisites
 
-## Como Executar
+- Python 3.12+
+- [uv](https://github.com/astral-sh/uv) (recommended) or `pip`
 
-1. Certifique-se de ter o `uv` instalado.
-2. Clone o repositório.
-3. Configure o arquivo `.env` (exemplo fornecido).
-4. Execute o crawler:
+### Installation
+
+1. Clone the repository:
    ```bash
-   uv run python -m src.main
+   git clone https://github.com/yourusername/async-sports-crawler.git
+   cd async-sports-crawler
    ```
 
-Os dados coletados serão salvos em `data.jsonl`.
+2. Install dependencies:
+   ```bash
+   uv sync
+   ```
+
+3. Create a `.env` file from the template:
+   ```bash
+   cp .env.example .env  # If .env.example exists, otherwise create .env
+   ```
+
+### Usage
+
+Run the crawler using `uv`:
+
+```bash
+uv run src/main.py
+```
+
+## Configuration
+
+The application is configured through environment variables or a `.env` file. Key settings include:
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `MAX_CONCURRENT_REQUESTS` | Maximum number of simultaneous worker tasks. | `10` |
+| `REQUEST_TIMEOUT` | Network request timeout in seconds. | `30.0` |
+| `TARGET_PAGE_COUNT` | Limit the total number of pages to crawl. | `100` |
+| `OUTPUT_FILE` | Path to the JSONL output file. | `data/results.jsonl` |
+
+## Technical Architecture
+
+The system is designed around a producer-consumer model:
+1. **Engine:** Orchestrates a pool of asynchronous workers.
+2. **Workers:** Fetch pages, extract data, and discover new links.
+3. **Storage:** Consumes processed data from an internal queue and persists it using buffered writes to minimize disk I/O overhead.
+4. **UI:** Periodically polls the engine state to update the terminal dashboard.
+
+## License
+
+MIT

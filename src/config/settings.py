@@ -6,13 +6,30 @@ class Settings(BaseSettings):
 
     # Multi-sport starting seeds
     BASE_URLS: list[str] = [
+        # BMBets
         "https://www.bmbets.com/basketball/",
         "https://www.bmbets.com/tennis/",
         "https://www.bmbets.com/volleyball/",
         "https://www.bmbets.com/hockey/",
+        "https://www.bmbets.com/american-football/",
+        "https://www.bmbets.com/baseball/",
+        "https://www.bmbets.com/handball/",
+        "https://www.bmbets.com/esports/",
+        
+        # OddsAgora
         "https://www.oddsagora.com.br/basketball/",
         "https://www.oddsagora.com.br/tennis/",
+        "https://www.oddsagora.com.br/volleyball/",
+        "https://www.oddsagora.com.br/esports/",
+        
+        # VitiSport
         "http://www.vitisport.com/index.php?clanek=quicktips&lang=en",
+        "http://www.vitisport.com/index.php?clanek=live&lang=en",
+        "http://www.vitisport.com/index.php?clanek=basketball&lang=en",
+        "http://www.vitisport.com/index.php?clanek=hockey&lang=en",
+        "http://www.vitisport.com/index.php?clanek=handball&lang=en",
+        
+        # SoccerVital (Adding it for completeness, though soccer is de-prioritized)
         "https://www.soccervital.com/"
     ]
     
@@ -25,7 +42,7 @@ class Settings(BaseSettings):
 
     # Performance & Scaling
     MAX_CONNECTIONS: int = 150
-    MAX_KEEPALIVE: int = 50
+    MAX_KEEPALIVE: int = 150
     BUFFER_SIZE: int = 200
     DNS_CACHE_TTL: int = 3600
 

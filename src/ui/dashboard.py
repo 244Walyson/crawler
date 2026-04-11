@@ -38,6 +38,7 @@ class CrawlerDashboard:
         )
         layout["main"].split_row(
             Layout(name="stats", ratio=1),
+            Layout(name="errors", ratio=1),
             Layout(name="workers", ratio=2)
         )
         return layout
@@ -58,12 +59,20 @@ class CrawlerDashboard:
         table.add_column("Metric", style="cyan")
         table.add_column("Value", style="magenta")
         table.add_row("Pages Collected", f"[bold green]{stats['collected']}[/]")
-        table.add_row("Events Extracted", f"[bold blue]{stats['events']}[/]")
         table.add_row("Errors", f"[bold red]{stats['errors']}[/]")
         table.add_row("Queue Size", str(stats["queue_size"]))
         table.add_row("Run Time", run_time)
         table.add_row("CPU Usage", f"{cpu_percent:.1f}%")
         table.add_row("Memory Usage", f"{memory_mb:.1f} MB")
+        return table
+
+    def get_errors_table(self) -> Table:
+        stats = self.engine.stats
+        table = Table(title="Error Classification")
+        table.add_column("Error Type", style="red")
+        table.add_column("Count", style="white")
+        for err_type, count in sorted(stats.get("error_counts", {}).items(), key=lambda x: x[1], reverse=True)[:10]:
+            table.add_row(err_type, str(count))
         return table
 
     def get_workers_table(self) -> Table:
@@ -133,6 +142,7 @@ class CrawlerDashboard:
                     progress.update(task_id, completed=stats["collected"])
                     layout["header"].update(Panel(f"Sports Odds Crawler - {datetime.now().strftime('%H:%M:%S')}", style="bold blue"))
                     layout["stats"].update(Panel(self.get_stats_table()))
+                    layout["errors"].update(Panel(self.get_errors_table()))
                     layout["workers"].update(Panel(self.get_workers_table()))
                     layout["logs"].update(self.get_logs_panel())
                     

@@ -1,7 +1,7 @@
 import anyio
 from urllib.parse import urlparse
 from src.crawler.engine import CrawlerEngine
-from src.parser.odds_parser import OddsParser
+from src.parser.link_extractor import LinkExtractor
 from src.storage.file_storage import FileStorage
 from src.config.settings import settings
 from src.config.logging import configure_logging, logger
@@ -11,12 +11,17 @@ async def main() -> None:
     # Setup
     configure_logging()
     
+    # Increase the anyio default thread limiter to match concurrency limit
+    # plus overhead for storage and DNS resolution.
+    limiter = anyio.to_thread.current_default_thread_limiter()
+    limiter.total_tokens = settings.CONCURRENCY_LIMIT * 3
+    
     # Extract domains from BASE_URLS for the allowed domains list
     allowed_domains = {urlparse(url).netloc for url in settings.BASE_URLS}
     
-    parser = OddsParser(allowed_domains=list(allowed_domains))
+    extractor = LinkExtractor(allowed_domains=list(allowed_domains))
     storage = FileStorage()
-    engine = CrawlerEngine(parser=parser, storage=storage)
+    engine = CrawlerEngine(extractor=extractor, storage=storage)
     dashboard = CrawlerDashboard(engine)
     
     logger.info(

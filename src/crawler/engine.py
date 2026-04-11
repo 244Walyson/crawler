@@ -1,4 +1,6 @@
 import asyncio
+from collections import Counter
+from datetime import datetime
 from typing import Any, Dict, List, Optional, Protocol, Set, Tuple
 from urllib.parse import urlparse
 
@@ -8,13 +10,7 @@ import httpx
 from src.config.logging import logger
 from src.config.settings import settings
 from src.crawler.scheduler import AdaptiveScheduler
-from src.models.event import SportEvent
-from src.parser.normalizer import Normalizer
-
-
-class PageParser(Protocol):
-    def parse(self, html: str, url: str) -> Tuple[List[Tuple[int, str]], List[SportEvent]]:
-        ...
+from src.models.raw_document import RawWebDocument
 
 
 class DataStorage(Protocol):
@@ -26,9 +22,14 @@ class DataStorage(Protocol):
         ...
 
 
+class LinkExtractorProtocol(Protocol):
+    def extract_links(self, html: str, base_url: str) -> List[Tuple[int, str]]:
+        ...
+
+
 class CrawlerEngine:
-    def __init__(self, parser: PageParser, storage: DataStorage) -> None:
-        self.parser = parser
+    def __init__(self, extractor: LinkExtractorProtocol, storage: DataStorage) -> None:
+        self.extractor = extractor
         self.storage = storage
         self.scheduler = AdaptiveScheduler()
         
@@ -45,8 +46,8 @@ class CrawlerEngine:
             )
         )
         self.pages_collected = 0
-        self.unique_events: Set[str] = set()
         self.errors = 0
+        self.error_counts: Counter[str] = Counter()
         self.workers_status: dict[int, str] = {}
         self._stop_event = anyio.Event()
         self.done_event = anyio.Event()
@@ -55,8 +56,8 @@ class CrawlerEngine:
     def stats(self) -> dict[str, Any]:
         return {
             "collected": self.pages_collected,
-            "events": len(self.unique_events),
             "errors": self.errors,
+            "error_counts": dict(self.error_counts),
             "queue_size": self.scheduler.qsize(),
             "workers": self.workers_status,
             "is_done": self.done_event.is_set(),
@@ -68,65 +69,79 @@ class CrawlerEngine:
             while not self._stop_event.is_set():
                 try:
                     self.workers_status[worker_id] = "Waiting..."
-                    url = await self.scheduler.get_next()
+                    next_task = await self.scheduler.get_next()
                     
-                    if url is None or self._stop_event.is_set():
+                    if next_task is None or self._stop_event.is_set():
                         break
+                        
+                    url, depth = next_task
 
                     self.scheduler.set_busy()
                     try:
                         self.workers_status[worker_id] = f"Fetching..."
                         response = await self.client.get(url)
                         
-                        if response.status_code >= 400:
-                            logger.warning("http_error", status=response.status_code, url=url)
+                        # Only accept successful text/html responses
+                        content_type = response.headers.get("content-type", "").lower()
+                        if response.status_code != 200 or "text/html" not in content_type:
+                            if response.status_code >= 400:
+                                self.error_counts[f"HTTP_{response.status_code}"] += 1
+                                self.errors += 1
+                                logger.warning("http_error", status=response.status_code, url=url)
                             continue
 
                         logger.info("page_fetched", url=url)
                         self.pages_collected += 1
+                        
                         if self.pages_collected >= settings.MAX_PAGES:
                             self._stop_event.set()
                         
-                        self.workers_status[worker_id] = "Parsing..."
-                        
-                        # Offload parsing to avoid blocking the event loop
                         html_text = response.text
                         resp_url = str(response.url)
-                        new_urls, events = await anyio.to_thread.run_sync(
-                            self.parser.parse, html_text, resp_url
+                        
+                        doc = RawWebDocument(
+                            url=resp_url,
+                            timestamp=datetime.utcnow(),
+                            status_code=response.status_code,
+                            depth=depth,
+                            html=html_text
+                        )
+                        await self.storage.save(doc)
+                        
+                        self.workers_status[worker_id] = "Extracting..."
+                        
+                        # Offload extraction to avoid blocking the event loop
+                        new_urls = await anyio.to_thread.run_sync(
+                            self.extractor.extract_links, html_text, resp_url
                         )
                         
-                        for event in events:
-                            event = Normalizer.clean_event(event)
-                            event.event_id = event.calculate_id()
-                            
-                            if event.event_id not in self.unique_events:
-                                self.unique_events.add(event.event_id)
-                                await self.storage.save(event)
-                                logger.info("event_extracted", teams=f"{event.home_team} vs {event.away_team}", sport=event.sport)
-                        
                         for priority, link in new_urls:
-                            await self.scheduler.add_task(link, priority=priority)
+                            self.scheduler.add_task(link, priority=priority, depth=depth + 1)
                             
-                    except Exception:
-                        pass
+                    except Exception as e:
+                        error_type = type(e).__name__
+                        self.error_counts[error_type] += 1
+                        self.errors += 1
+                        logger.debug("worker_error", error=str(e), url=url)
                     finally:
                         self.scheduler.set_idle()
                     
                     self.workers_status[worker_id] = "Delay..."
                     await anyio.sleep(settings.REQUEST_DELAY)
 
-                except Exception:
+                except Exception as e:
+                    error_type = type(e).__name__
+                    self.error_counts[f"Loop_{error_type}"] += 1
                     self.errors += 1
+                    logger.debug("worker_loop_error", error=str(e))
         finally:
             self.workers_status[worker_id] = "Finished"
 
     async def run(self) -> None:
         self.scheduler.clear()
-        self.unique_events.clear()
         
         for url in settings.BASE_URLS:
-            await self.scheduler.add_task(url, priority=0)
+            self.scheduler.add_task(url, priority=0, depth=0)
         
         try:
             async with anyio.create_task_group() as tg:

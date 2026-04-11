@@ -8,7 +8,8 @@ from typing import Dict, List, Optional, Set, Tuple
 class CrawlTask:
     priority: int  # Smaller = Higher
     url: str = field(compare=False)
-    next_crawl_time: float = field(default_factory=time.time)
+    depth: int = field(compare=False, default=0)
+    next_crawl_time: float = field(default_factory=time.time, compare=False)
 
 class AdaptiveScheduler:
     """Simple Priority-based Scheduler with deduplication."""
@@ -26,19 +27,22 @@ class AdaptiveScheduler:
     def update_domain_yield(self, domain: str, count: int = 1):
         self.domain_yields[domain] = self.domain_yields.get(domain, 0) + count
 
-    async def add_task(self, url: str, priority: int = 10) -> None:
+    def add_task(self, url: str, priority: int = 10, depth: int = 0) -> None:
         if url in self.visited or url in self.queued:
             return
         
-        import urllib.parse
-        domain = urllib.parse.urlparse(url).netloc
-        boost = -2 if self.domain_yields.get(domain, 0) > 0 else 0
+        try:
+            # Fast string split to get domain: 'https://example.com/path' -> 'example.com'
+            domain = url.split('/', 3)[2].replace('www.', '')
+            boost = -2 if self.domain_yields.get(domain, 0) > 0 else 0
+        except IndexError:
+            boost = 0
             
         self.queued.add(url)
-        await self.queue.put(CrawlTask(priority=priority + boost, url=url))
+        self.queue.put_nowait(CrawlTask(priority=priority + boost, url=url, depth=depth))
         self._initialized = True
 
-    async def get_next(self) -> Optional[str]:
+    async def get_next(self) -> Optional[Tuple[str, int]]:
         # Wait for first tasks
         while not self._initialized:
             await asyncio.sleep(0.1)
@@ -61,7 +65,7 @@ class AdaptiveScheduler:
             self.visited.add(task.url)
             if task.url in self.queued:
                 self.queued.remove(task.url)
-            return task.url
+            return task.url, task.depth
 
     def clear(self):
         self.visited.clear()
