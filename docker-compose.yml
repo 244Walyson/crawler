@@ -1,0 +1,87 @@
+services:
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    command: >
+      redis-server
+      --appendonly yes
+      --maxmemory 4gb
+      --maxmemory-policy allkeys-lru
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  mongodb:
+    image: mongo:7
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo_data:/data/db
+    environment:
+      MONGO_INITDB_DATABASE: sports_crawler
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  crawler:
+    build: .
+    environment:
+      REDIS_URL: redis://redis:6379
+      MONGODB_URI: mongodb://mongodb:27017
+      MAX_PAGES: "1000000"
+      CONCURRENCY_LIMIT: "100"
+      REQUEST_DELAY: "0.0"
+      TIMEOUT: "5.0"
+      HEADLESS: "true"
+    depends_on:
+      redis:
+        condition: service_healthy
+      mongodb:
+        condition: service_healthy
+    restart: on-failure
+    deploy:
+      replicas: 10
+
+  monitor:
+    build: .
+    command: uv run python -m src.monitor.server
+    ports:
+      - "8080:8080"
+    environment:
+      REDIS_URL: redis://redis:6379
+      MONITOR_PORT: "8080"
+      MAX_PAGES: "50000"
+    depends_on:
+      - redis
+
+  redisinsight:
+    image: redis/redisinsight:latest
+    ports:
+      - "5540:5540"
+    depends_on:
+      - redis
+
+  mongo-express:
+    image: mongo-express:1.0.2
+    ports:
+      - "8081:8081"
+    environment:
+      ME_CONFIG_MONGODB_URL: mongodb://mongodb:27017
+      ME_CONFIG_BASICAUTH: "false"
+      ME_CONFIG_MONGODB_ENABLE_ADMIN: "true"
+    depends_on:
+      mongodb:
+        condition: service_healthy
+    restart: on-failure
+
+volumes:
+  redis_data:
+  mongo_data:

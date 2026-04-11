@@ -1,37 +1,101 @@
-# Crawler de Odds Esportivas
+# Async Sports Odds Crawler
 
-Este projeto é um coletor (crawler) de alto desempenho desenvolvido para a disciplina de Recuperação de Informações na Web e Redes Sociais. O objetivo é coletar e comparar odds de eventos esportivos de diversas fontes.
+A high-performance, asynchronous web crawler designed for efficient sports odds data harvesting. Built with modern Python concurrency primitives, it features a real-time terminal dashboard, adaptive scheduling, and buffered asynchronous storage.
 
-## 1. Proposta do Sistema de RI
+## Features
 
-O sistema visa auxiliar apostadores e analistas a encontrar as melhores oportunidades de apostas em eventos de futebol, consolidando dados de múltiplos provedores em um único local.
+- **High-Concurrency Engine:** Leverages `anyio` and `httpx` for efficient, non-blocking network I/O and worker pool management.
+- **Real-Time Monitoring:** Interactive terminal dashboard powered by `rich`, providing live updates on crawl progress, worker status, and data collection rates.
+- **Adaptive Scheduler:** Intelligent URL prioritization and deduplication to maximize crawling efficiency.
+- **Buffered Async Storage:** High-throughput data persistence to JSONL format using asynchronous file operations.
+- **Configurable Architecture:** Fine-tune performance parameters, concurrency limits, and target scopes via environment variables.
+- **Distributed Mode:** Scale horizontally with Redis-backed scheduling and MongoDB storage across multiple containers.
+- **robots.txt Compliance:** Automatically fetches and respects per-domain robots.txt rules.
+- **Web Monitor:** Real-time HTTP dashboard (aiohttp + SSE) for monitoring distributed crawl runs.
 
-## 2. Descrição do Coletor
+## Project Structure
 
-- **Tipo**: Coletor focado (Focused Crawler) em sites de agregação de odds esportivas.
-- **Propriedades**:
-    - **Assíncrono**: Utiliza `httpx` e `anyio` para realizar múltiplas requisições simultâneas sem bloquear o processo.
-    - **Alta Performance**: O parsing do HTML é feito com `selectolax` (baseado em Lexbor), que é significativamente mais rápido que BeautifulSoup.
-    - **Concorrência**: Suporta múltiplos workers configuráveis via variáveis de ambiente.
-- **Políticas**:
-    - **Escopo**: Limitado aos domínios permitidos (ex: OddsPortal, BetExplorer).
-    - **Polidez**: Delay configurável entre requisições para evitar sobrecarga nos servidores alvo e bloqueios.
-    - **Deduplicação**: Mantém um registro de URLs visitadas e enfileiradas para evitar coletas redundantes.
-- **Critério de Parada**: O crawler para automaticamente ao atingir o limite de páginas configurado (ex: 50.000 páginas para pontuação máxima).
-- **Justificativa**: A escolha de Python com `uv` e bibliotecas assíncronas modernas garante um desenvolvimento rápido, código elegante e performance necessária para escalas de dezenas de milhares de páginas.
+```text
+src/
+├── config/         # Settings and logging configuration
+├── crawler/        # Core engine, scheduling logic, and robots.txt cache
+├── models/         # Data models for extracted documents
+├── monitor/        # HTTP monitoring server (aiohttp + SSE)
+├── parser/         # Link extraction
+├── scheduler/      # Redis-backed distributed scheduler
+├── storage/        # Async file and MongoDB storage backends
+├── ui/             # Terminal-based real-time dashboard
+└── main.py         # Application entry point
+```
 
-## 3. Escala
+## Getting Started
 
-O sistema foi projetado para escalar horizontalmente. Para atingir a meta de 50.000 páginas, basta configurar o `MAX_PAGES` no arquivo `.env` e ajustar a concorrência conforme a capacidade da rede.
+### Prerequisites
 
-## Como Executar
+- Python 3.12+
+- [uv](https://github.com/astral-sh/uv) (recommended) or `pip`
+- Docker + Docker Compose (for distributed mode)
 
-1. Certifique-se de ter o `uv` instalado.
-2. Clone o repositório.
-3. Configure o arquivo `.env` (exemplo fornecido).
-4. Execute o crawler:
+### Local Installation
+
+1. Clone the repository and install dependencies:
+   ```bash
+   git clone <repo-url>
+   cd crawler
+   uv sync
+   ```
+
+2. Create a `.env` file:
+   ```bash
+   MAX_PAGES=50000
+   CONCURRENCY_LIMIT=100
+   REQUEST_DELAY=0.0
+   MAX_CONCURRENCY_PER_DOMAIN=8
+   ```
+
+3. Run the crawler:
    ```bash
    uv run python -m src.main
    ```
 
-Os dados coletados serão salvos em `data.jsonl`.
+### Docker (Distributed Mode)
+
+Start the full stack (Redis + MongoDB + 10 crawler replicas + monitor):
+
+```bash
+docker compose up --build
+```
+
+- **Monitor dashboard:** http://localhost:8080
+- **RedisInsight:** http://localhost:5540
+- **Mongo Express:** http://localhost:8081
+
+Scale crawlers:
+```bash
+docker compose up --scale crawler=20
+```
+
+## Configuration
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `MAX_PAGES` | Total pages limit (global, across all instances) | `50000` |
+| `CONCURRENCY_LIMIT` | Workers per crawler instance | `100` |
+| `REQUEST_DELAY` | Delay between requests (seconds) | `0.0` |
+| `MAX_CONCURRENCY_PER_DOMAIN` | Max simultaneous requests to the same domain | `8` |
+| `MONGODB_URI` | MongoDB connection string | `mongodb://localhost:27017` |
+| `REDIS_URL` | Redis connection string | `redis://localhost:6379` |
+| `HEADLESS` | Disable terminal UI (for Docker) | `false` |
+
+## Architecture
+
+The system uses a protocol-based dependency injection design:
+
+1. **Engine:** Orchestrates async workers, respects robots.txt, and uses per-domain rate limiting.
+2. **Scheduler:** Pluggable — in-memory `AdaptiveScheduler` for single-node or `RedisScheduler` for distributed runs.
+3. **Storage:** Pluggable — `FileStorage` (JSONL) or `MongoStorage` (buffered bulk inserts via Motor).
+4. **Monitor:** Standalone aiohttp server reading Redis keys, streaming stats via SSE.
+
+## License
+
+MIT
