@@ -79,8 +79,10 @@ class CrawlerEngine:
                         response = await self.client.get(url)
                         
                         if response.status_code >= 400:
+                            logger.warning("http_error", status=response.status_code, url=url)
                             continue
 
+                        logger.info("page_fetched", url=url)
                         self.pages_collected += 1
                         if self.pages_collected >= settings.MAX_PAGES:
                             self._stop_event.set()
@@ -101,6 +103,7 @@ class CrawlerEngine:
                             if event.event_id not in self.unique_events:
                                 self.unique_events.add(event.event_id)
                                 await self.storage.save(event)
+                                logger.info("event_extracted", teams=f"{event.home_team} vs {event.away_team}", sport=event.sport)
                         
                         for priority, link in new_urls:
                             await self.scheduler.add_task(link, priority=priority)

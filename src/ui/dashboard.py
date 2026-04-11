@@ -87,10 +87,17 @@ class CrawlerDashboard:
                     # Example: event='page_fetched' url='http...' -> page_fetched: http...
                     event_match = re.search(r"event='([^']+)'", raw)
                     url_match = re.search(r"url='([^']+)'", raw)
+                    teams_match = re.search(r"teams='([^']+)'", raw)
+                    sport_match = re.search(r"sport='([^']+)'", raw)
                     
                     if event_match:
                         event_name = event_match.group(1)
-                        detail = url_match.group(1) if url_match else ""
+                        if event_name == "event_extracted" and teams_match:
+                            detail = f"{teams_match.group(1)} ({sport_match.group(1) if sport_match else '?'})"
+                        elif url_match:
+                            detail = url_match.group(1)
+                        else:
+                            detail = ""
                         formatted = f"[{datetime.now().strftime('%H:%M:%S')}] {event_name}: {detail[:60]}"
                     else:
                         formatted = f"[{datetime.now().strftime('%H:%M:%S')}] {raw[:80]}"

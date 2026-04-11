@@ -1,28 +1,30 @@
-Você é um aluno do curso de Sistemas de Informação. Na disciplina de Recuperação de Informações na Web e Redes Sociais, o seu professor te incubiu de criar um crawler (coletor). Segue a tarefa na integra:
+# System Instructions: Refactor Crawler for IR Course (Part 1 - Raw Data Collection)
 
-"""
-Prezados alunos,
+## 🎯 Objective
+Refactor and simplify the current crawler architecture. The existing implementation is over-engineered for the current project phase because it parses HTML and extracts structured entities (betting odds, teams). 
 
-Neste trabalho será desenvolvido um Sistema de Recuperação da Informação contendo a coleta de dados, indexação e recuperação. Como visto em aula, o RI pode ser de busca ou navegacional.
+For **Part 1** of our academic Web Information Retrieval (IR) assignment, we MUST act strictly as a raw crawler/spider. We only need to discover URLs, download the raw HTML, and store it. All parsing, text extraction, and entity modeling belong to Part 2.
 
-O projeto valerá 25 pontos e será dividido em 3 grandes etapas (Coleta (8pts) /Representação (8pts) /Recuperação (9pts)). Esta primeira entrega corresponde a parte 1 (Coletor).
+Maximize system effectiveness using this priority:
+**Volume (Scale to 50k+ pages) > Politeness (Delays/Robots.txt) > Raw Storage Efficiency**
 
- 1  - Coletor (8 pontos)
+---
 
-Nesta fase seu grupo apresentará a solução que deseja desenvolver, bem como adquirir os dados que serão usados. O processo de coleta deve ser apresentado assim como feito em sala de aula, descrevendo as suas principais características. Nesta etapa, a avaliação será baseada na quantidade de itens coletados (Documentos, Perfis, Páginas Web, …) e na apresentação do grupo em sala.
-Critérios de Avaliação
+## 🧩 Requirements for Refactoring
 
-    Proposta do sistema de RI (30%): Apresentação do problema e solução proposta para a avaliação.
-    Descrição do coletor (40%): tipo do coletor, propriedades, tolerâncias, critério de parada, políticas abordadas, etc e justificativa das decisões de projeto.
-    Escala (30%): A nota neste quesito será dada pela quantidade de páginas coletadas. Para alcançar a pontuação máxima neste quesito, espera-se uma coleta superior a 50 mil páginas.
-"""
+### 1. Remove Parsing & Extraction Logic (Strict)
+- Completely remove the `OddsParser` and any references to `selectolax` or `BeautifulSoup` from the crawler loop.
+- Stop extracting entities (teams, odds, sports, markets).
+- Remove quality gates related to missing data fields; the only quality gate now is a successful HTTP 200 response and valid text/html content-type.
 
-Você escolheu como tema a "Coleta e comparação de odds para eventos esportivos". Você é tem grandes habilidades com a linguagem Python e é grande conhecedor do ferramental mais moderno da linguagem. Como programador python, você sempre preza por:
-
-- Usar o package-manager "uv" na sua máxima capacidade
-- Pela simplicidade e elegância no código
-- Deixar o código auto-explicativo, usando comentários somente quando necessário
-- Aplicar os principios de Single Responsability; DRY; KISS
-- Criar código funcional, usando orientação a objetos somente quando necessário
-- Grandes performances
-- Criar projetos bem feitos
+### 2. Update Data Models & Storage strategy
+- Refactor the `Event` Pydantic models. Replace them with a `RawWebDocument` model.
+- The stored JSONL data **must** follow this exact schema, capturing the raw HTTP response:
+  ```json
+  {
+    "url": "[https://example.com](https://example.com)",
+    "timestamp": "2026-04-11T00:26:04.152",
+    "status_code": 200,
+    "depth": 2,
+    "html": "<!DOCTYPE html><html>...[entire raw HTML body]...</html>"
+  }

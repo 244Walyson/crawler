@@ -6,111 +6,103 @@ from urllib.parse import urljoin, urlparse
 from selectolax.lexbor import LexborHTMLParser
 
 from src.config.logging import logger
-from src.models.event import Odds, SportEvent
+from src.models.event import EventStatus, Odds, SportEvent
 from src.parser.normalizer import Normalizer
 
 
 class OddsParser:
     """
-    Highly efficient generic parser for sports betting sites.
-    Uses pre-compiled patterns and fail-fast checks.
+    KISS-focused generic parser for multiple sports.
     """
 
     def __init__(self, allowed_domains: List[str]) -> None:
         self.allowed_domains = allowed_domains
-        # Pre-compile patterns for speed
         self.numeric_pattern = re.compile(r"(\d{1,2}\.\d{2})")
-        # Fail-fast check: does row have at least one digit?
-        self.has_digit = re.compile(r"\d")
-        self.noise_pattern = re.compile(r"(tabela|resultados|odds|futebol|vs|v|x|hoje|live|rodada|classific)", re.IGNORECASE)
+        self.sport_pattern = re.compile(
+            r"(soccer|football|futebol|tennis|tenis|basketball|basquete|hockey|hoquei|baseball|volleyball|volei|handball|mma|ufc|boxing|boxe|rugby)", 
+            re.IGNORECASE
+        )
 
     def is_allowed(self, url: str) -> bool:
-        # Fast path string matching instead of full urlparse
         for domain in self.allowed_domains:
             if f"//{domain}" in url or f".{domain}" in url:
                 return True
         return False
 
-    def _extract_from_container(self, container: Any, url: str, parser: LexborHTMLParser) -> List[SportEvent]:
-        # Optimization: Fail-fast if container text has no digits (no odds)
+    def _extract_from_container(self, container: Any, url: str, title: str) -> List[SportEvent]:
         raw_text = container.text(separator=" ", strip=True)
-        if not self.has_digit.search(raw_text):
-            return []
         
-        # Look for numeric values
+        # 1. Odds check (at least 2 numbers like 1.50)
         all_nums = [float(n) for n in self.numeric_pattern.findall(raw_text) if 1.01 <= float(n) <= 100.0]
         if len(all_nums) < 2:
             return []
 
-        # Extract team names efficiently
+        # 2. Team extraction (Target links/spans to get full names)
         potential_teams = []
-        for word in raw_text.split():
-            # Strip non-alpha
-            clean_word = "".join(ch for ch in word if ch.isalpha()).strip()
-            if len(clean_word) > 2 and not self.noise_pattern.search(clean_word):
-                potential_teams.append(clean_word)
+        for node in container.css("a, span, div.team, td.name"):
+            text = node.text(strip=True)
+            if len(text) > 2 and not any(ch.isdigit() for ch in text) and "odds" not in text.lower():
+                if text not in potential_teams:
+                    potential_teams.append(text)
+                    
+        if len(potential_teams) < 2:
+            return [] # Quality gate
 
-        if len(potential_teams) >= 2:
-            home, away = potential_teams[0], potential_teams[1]
-            
-            # Simple tournament extraction
-            tournament = "Discovery"
-            title_node = parser.css_first("title")
-            if title_node:
-                tournament = title_node.text().split("|")[0].split("-")[0].strip()
+        home, away = potential_teams[0], potential_teams[1]
 
-            odds = Odds(
-                provider="Generic Aggregator",
-                home_win=all_nums[0],
-                draw=all_nums[1] if len(all_nums) >= 3 else None,
-                away_win=all_nums[-1]
-            )
+        # 3. Sport Detection (URL > Title > Default)
+        sport_match = self.sport_pattern.search(url) or self.sport_pattern.search(title)
+        sport = sport_match.group(1).lower() if sport_match else "generic"
+        
+        # Standardize
+        if sport in ["football", "futebol"]: sport = "soccer"
+        if sport in ["basquete"]: sport = "basketball"
+        if sport in ["volei"]: sport = "volleyball"
+        if sport in ["tenis"]: sport = "tennis"
 
-            if Normalizer.validate_odds(odds):
-                event = SportEvent(
-                    sport="soccer",
-                    tournament=tournament,
-                    home_team=home,
-                    away_team=away,
-                    event_time=datetime.utcnow(),
-                    url=url,
-                    odds=[odds]
-                )
-                return [Normalizer.clean_event(event)]
+        odds = Odds(
+            provider="Generic Aggregator",
+            home_win=all_nums[0],
+            draw=all_nums[1] if len(all_nums) >= 3 else None,
+            away_win=all_nums[-1]
+        )
+
+        if Normalizer.validate_odds(odds):
+            return [Normalizer.clean_event(SportEvent(
+                sport=sport,
+                tournament=title.split("|")[0].strip(),
+                home_team=home,
+                away_team=away,
+                event_time=datetime.utcnow(),
+                status=EventStatus.LIVE if "live" in url.lower() or "live" in raw_text.lower() else EventStatus.UPCOMING,
+                url=url,
+                odds=[odds]
+            ))]
         
         return []
 
     def parse(self, html: str, url: str) -> Tuple[List[Tuple[int, str]], List[SportEvent]]:
         parser = LexborHTMLParser(html)
-        new_urls: List[Tuple[int, str]] = []
-        events: List[SportEvent] = []
-
-        # 1. Efficient Link Discovery
-        # We only iterate a[href] once
+        title_node = parser.css_first("title")
+        title = title_node.text() if title_node else ""
+        
+        # 1. Link Discovery
+        new_urls = []
         for node in parser.css("a[href]"):
             link = node.attributes.get("href")
             if not link: continue
-            
-            absolute_url = urljoin(url, link)
-            if self.is_allowed(absolute_url):
-                clean_url = absolute_url.split("#")[0].split("?")[0]
-                # Heuristic: deep paths = higher priority
-                depth = clean_url.count("/")
-                priority = max(1, 10 - depth)
-                new_urls.append((priority, clean_url))
+            abs_url = urljoin(url, link)
+            if self.is_allowed(abs_url):
+                new_urls.append((max(1, 10 - abs_url.count("/")), abs_url.split("#")[0]))
 
-        # 2. Optimized structural extraction
-        # Only check containers likely to hold data
-        for container in parser.css("tr, div.match-row, div.event-row"):
-            extracted = self._extract_from_container(container, url, parser)
-            if extracted:
-                events.extend(extracted)
+        # 2. Event Extraction
+        events = []
+        for container in parser.css("tr, div.match-row, div.event-row, div.custom-bet-block"):
+            events.extend(self._extract_from_container(container, url, title))
         
-        # Fast local deduplication
-        unique_events = {}
+        # Local deduplication
+        unique = {}
         for e in events:
-            key = f"{e.home_team}:{e.away_team}"
-            if key not in unique_events:
-                unique_events[key] = e
-        
-        return new_urls, list(unique_events.values())
+            unique[f"{e.sport}:{e.home_team}:{e.away_team}"] = e
+            
+        return new_urls, list(unique.values())
