@@ -1,18 +1,20 @@
 import asyncio
 import time
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional, Set, Tuple
+from typing import Dict, Optional, Set, Tuple
 
 
 @dataclass(order=True)
 class CrawlTask:
-    priority: int  # Smaller = Higher
+    priority: int
     url: str = field(compare=False)
     depth: int = field(compare=False, default=0)
     next_crawl_time: float = field(default_factory=time.time, compare=False)
 
+
 class AdaptiveScheduler:
-    """Simple Priority-based Scheduler with deduplication."""
+    """In-memory scheduler for single-process mode."""
+
     def __init__(self) -> None:
         self.queue: asyncio.PriorityQueue[CrawlTask] = asyncio.PriorityQueue()
         self.visited: Set[str] = set()
@@ -21,60 +23,75 @@ class AdaptiveScheduler:
         self._busy_workers = 0
         self._initialized = False
 
-    def set_busy(self): self._busy_workers += 1
-    def set_idle(self): self._busy_workers -= 1
+    async def set_idle(self) -> None:
+        self._busy_workers -= 1
 
-    def update_domain_yield(self, domain: str, count: int = 1):
-        self.domain_yields[domain] = self.domain_yields.get(domain, 0) + count
-
-    def add_task(self, url: str, priority: int = 10, depth: int = 0) -> None:
+    async def add_task(self, url: str, priority: int = 10, depth: int = 0) -> None:
         if url in self.visited or url in self.queued:
             return
-        
+
         try:
-            # Fast string split to get domain: 'https://example.com/path' -> 'example.com'
             domain = url.split('/', 3)[2].replace('www.', '')
             boost = -2 if self.domain_yields.get(domain, 0) > 0 else 0
         except IndexError:
             boost = 0
-            
+
         self.queued.add(url)
         self.queue.put_nowait(CrawlTask(priority=priority + boost, url=url, depth=depth))
         self._initialized = True
 
     async def get_next(self) -> Optional[Tuple[str, int]]:
-        # Wait for first tasks
         while not self._initialized:
-            await asyncio.sleep(0.1)
+            await asyncio.sleep(0.05)
 
+        consecutive_empty = 0
         while True:
-            if self.queue.empty():
-                if self._busy_workers == 0:
-                    await asyncio.sleep(1.0)
-                    if self.queue.empty() and self._busy_workers == 0:
+            try:
+                task = await asyncio.wait_for(self.queue.get(), timeout=1.0)
+                consecutive_empty = 0
+                self.visited.add(task.url)
+                self.queued.discard(task.url)
+                self._busy_workers += 1
+                return task.url, task.depth
+            except asyncio.TimeoutError:
+                if self._busy_workers == 0 and self.queue.empty():
+                    consecutive_empty += 1
+                    if consecutive_empty >= 3:
                         return None
                 else:
-                    await asyncio.sleep(0.1)
-                    continue
+                    consecutive_empty = 0
 
-            try:
-                task = self.queue.get_nowait()
-            except asyncio.QueueEmpty:
-                continue
+    async def increment_total(self) -> int:
+        return -1
 
-            self.visited.add(task.url)
-            if task.url in self.queued:
-                self.queued.remove(task.url)
-            return task.url, task.depth
+    async def signal_stop(self) -> None:
+        pass
 
-    def clear(self):
+    async def publish_status(self, worker_id: int, status: str) -> None:
+        pass
+
+    async def publish_activity(self, url: str) -> None:
+        pass
+
+    async def publish_error(self, error_type: str) -> None:
+        pass
+
+    async def set_start_time(self) -> None:
+        pass
+
+    async def publish_log(self, entry: str) -> None:
+        pass
+
+    def qsize(self) -> int:
+        return self.queue.qsize()
+
+    async def clear(self) -> None:
         self.visited.clear()
         self.queued.clear()
         self.domain_yields.clear()
         self._initialized = False
         while not self.queue.empty():
-            try: self.queue.get_nowait()
-            except: break
-
-    def qsize(self) -> int:
-        return self.queue.qsize()
+            try:
+                self.queue.get_nowait()
+            except asyncio.QueueEmpty:
+                break

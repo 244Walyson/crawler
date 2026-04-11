@@ -30,26 +30,54 @@ class Settings(BaseSettings):
         "http://www.vitisport.com/index.php?clanek=handball&lang=en",
         
         # SoccerVital (Adding it for completeness, though soccer is de-prioritized)
-        "https://www.soccervital.com/"
+        "https://www.soccervital.com/",
+
+        # BetExplorer — historical odds archive
+        "https://www.betexplorer.com/soccer/",
+        "https://www.betexplorer.com/basketball/",
+        "https://www.betexplorer.com/tennis/",
+        "https://www.betexplorer.com/ice-hockey/",
+        "https://www.betexplorer.com/volleyball/",
+        "https://www.betexplorer.com/handball/",
+
+        # Forebet — predictions + odds
+        "https://www.forebet.com/en/football-predictions",
+        "https://www.forebet.com/en/basketball-predictions",
+        "https://www.forebet.com/en/tennis-predictions",
+
+        # TipsScore — tips and odds
+        "https://www.tipsscore.com/",
+
+        # OddsPortal — odds comparison
+        "https://www.oddsportal.com/soccer/",
+        "https://www.oddsportal.com/basketball/",
+        "https://www.oddsportal.com/tennis/",
+        "https://www.oddsportal.com/ice-hockey/",
+        "https://www.oddsportal.com/volleyball/",
     ]
     
     # Crawler Constraints
     MAX_PAGES: int = 50000
     CONCURRENCY_LIMIT: int = 100
-    REQUEST_DELAY: float = 0.01
+    REQUEST_DELAY: float = 0.0
     TIMEOUT: float = 5.0
     USER_AGENT: str = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36"
 
     # Performance & Scaling
-    MAX_CONNECTIONS: int = 150
-    MAX_KEEPALIVE: int = 150
-    BUFFER_SIZE: int = 200
+    MAX_CONNECTIONS: int = 200
+    MAX_KEEPALIVE: int = 200
+    BUFFER_SIZE: int = 500
     DNS_CACHE_TTL: int = 3600
+    MAX_CONCURRENCY_PER_DOMAIN: int = 8  # max simultaneous requests to same domain
 
     # Storage
     MONGODB_URI: str = "mongodb://localhost:27017"
     DATABASE_NAME: str = "sports_crawler"
     COLLECTION_NAME: str = "odds_data"
+
+    # Distributed
+    REDIS_URL: str = "redis://localhost:6379"
+    HEADLESS: bool = False
 
 
 settings = Settings()
