@@ -15,7 +15,7 @@ def configure_logging(level=logging.INFO):
     # Remove existing handlers
     for handler in root_logger.handlers[:]:
         root_logger.removeHandler(handler)
-
+        
     # ONLY QueueHandler for UI - no more direct StreamHandler to avoid UI breaking
     root_logger.addHandler(QueueHandler(log_queue))
 

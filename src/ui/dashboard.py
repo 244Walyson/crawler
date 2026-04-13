@@ -45,16 +45,16 @@ class CrawlerDashboard:
 
     def get_stats_table(self) -> Table:
         stats = self.engine.stats
-
+        
         # Calculate run time
         elapsed = time.time() - self.start_time
         mins, secs = divmod(int(elapsed), 60)
         run_time = f"{mins:02d}:{secs:02d}"
-
+        
         # Get process resources
         cpu_percent = self.process.cpu_percent(interval=None)
         memory_mb = self.process.memory_info().rss / (1024 * 1024)
-
+        
         table = Table(title="Crawler Statistics")
         table.add_column("Metric", style="cyan")
         table.add_column("Value", style="magenta")
@@ -89,9 +89,11 @@ class CrawlerDashboard:
             try:
                 msg = log_queue.get_nowait()
                 formatted = ""
-
+                
                 if hasattr(msg, "getMessage"):
                     raw = msg.getMessage()
+                    # Clean up logfmt style strings for better UI readability
+                    # Example: event='page_fetched' url='http...' -> page_fetched: http...
                     event_match = re.search(r"event='([^']+)'", raw)
                     url_match = re.search(r"url='([^']+)'", raw)
                     teams_match = re.search(r"teams='([^']+)'", raw)
@@ -108,15 +110,15 @@ class CrawlerDashboard:
                         formatted = f"[{datetime.now().strftime('%H:%M:%S')}] {event_name}: {detail[:60]}"
                     else:
                         formatted = f"[{datetime.now().strftime('%H:%M:%S')}] {raw[:80]}"
-
+                    
                     if formatted:
                         self.recent_logs.append(formatted)
-
+                
                 if len(self.recent_logs) > 8:
                     self.recent_logs.pop(0)
             except queue.Empty:
                 break
-
+        
         log_text = Text("\n".join(self.recent_logs))
         return Panel(log_text, title="Recent Activity", style="dim white")
 
@@ -129,7 +131,7 @@ class CrawlerDashboard:
             TimeRemainingColumn(),
         )
         task_id = progress.add_task("Crawling...", total=settings.MAX_PAGES)
-
+        
         layout["header"].update(Panel(f"Sports Odds Crawler - {datetime.now().strftime('%H:%M:%S')}", style="bold blue"))
         layout["footer"].update(progress)
 
@@ -143,13 +145,14 @@ class CrawlerDashboard:
                     layout["errors"].update(Panel(self.get_errors_table()))
                     layout["workers"].update(Panel(self.get_workers_table()))
                     layout["logs"].update(self.get_logs_panel())
-
+                    
                     if stats["is_done"]:
                         break
-
+                    
                     if len(stats["workers"]) > 0 and all(s == "Finished" for s in stats["workers"].values()) and stats["queue_size"] == 0:
-                        break
+                         break
                 except Exception:
+                    # Silence errors during shutdown
                     break
-
+                
                 await asyncio.sleep(0.25)

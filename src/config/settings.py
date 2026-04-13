@@ -55,7 +55,7 @@ class Settings(BaseSettings):
         "https://www.oddsportal.com/ice-hockey/",
         "https://www.oddsportal.com/volleyball/",
     ]
-
+    
     # Crawler Constraints
     MAX_PAGES: int = 50000
     CONCURRENCY_LIMIT: int = 100
