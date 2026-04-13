@@ -15,20 +15,20 @@ class Settings(BaseSettings):
         "https://www.bmbets.com/baseball/",
         "https://www.bmbets.com/handball/",
         "https://www.bmbets.com/esports/",
-
+        
         # OddsAgora
         "https://www.oddsagora.com.br/basketball/",
         "https://www.oddsagora.com.br/tennis/",
         "https://www.oddsagora.com.br/volleyball/",
         "https://www.oddsagora.com.br/esports/",
-
+        
         # VitiSport
         "http://www.vitisport.com/index.php?clanek=quicktips&lang=en",
         "http://www.vitisport.com/index.php?clanek=live&lang=en",
         "http://www.vitisport.com/index.php?clanek=basketball&lang=en",
         "http://www.vitisport.com/index.php?clanek=hockey&lang=en",
         "http://www.vitisport.com/index.php?clanek=handball&lang=en",
-
+        
         # SoccerVital (Adding it for completeness, though soccer is de-prioritized)
         "https://www.soccervital.com/",
 

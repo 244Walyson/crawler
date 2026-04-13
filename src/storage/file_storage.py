@@ -27,8 +27,9 @@ class FileStorage:
             if len(self.buffer) >= settings.BUFFER_SIZE:
                 to_flush_items = self.buffer
                 self.buffer = []
-
+        
         if to_flush_items:
+            # Offload JSON serialization to avoid blocking the event loop
             to_flush = await anyio.to_thread.run_sync(
                 lambda items: [e.model_dump_json() for e in items],
                 to_flush_items
@@ -41,8 +42,9 @@ class FileStorage:
             if self.buffer:
                 to_flush_items = self.buffer
                 self.buffer = []
-
+        
         if to_flush_items:
+            # Offload JSON serialization to avoid blocking the event loop
             to_flush = await anyio.to_thread.run_sync(
                 lambda items: [e.model_dump_json() for e in items],
                 to_flush_items

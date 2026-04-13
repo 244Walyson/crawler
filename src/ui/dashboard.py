@@ -96,7 +96,7 @@ class CrawlerDashboard:
                     url_match = re.search(r"url='([^']+)'", raw)
                     teams_match = re.search(r"teams='([^']+)'", raw)
                     sport_match = re.search(r"sport='([^']+)'", raw)
-
+                    
                     if event_match:
                         event_name = event_match.group(1)
                         if event_name == "event_extracted" and teams_match:

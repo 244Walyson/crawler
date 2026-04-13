@@ -11,7 +11,7 @@ def configure_logging(level=logging.INFO):
     # Standard logging setup
     root_logger = logging.getLogger()
     root_logger.setLevel(level)
-
+    
     # Remove existing handlers
     for handler in root_logger.handlers[:]:
         root_logger.removeHandler(handler)
