@@ -1,0 +1,28 @@
+{
+  "chunk_size": 500,
+  "docs_processed": 435,
+  "chunks_indexed": 2387,
+  "tokens_total": 1087902,
+  "elapsed_sec": 118.388,
+  "docs_per_sec": 3.67,
+  "chunks_per_sec": 20.16,
+  "tokens_per_sec": 9189.26,
+  "redis_used_memory_before": 1211176,
+  "redis_used_memory_after": 27748392,
+  "redis_index_size_bytes": 40439076,
+  "redis_index_size_mb": 38.566,
+  "num_terms": 8052,
+  "avg_postings_len": 68.74,
+  "sample_postings": {
+    "idx:term:yeni": 1,
+    "idx:term:carano": 1,
+    "idx:term:ataqu": 8,
+    "idx:term:plat": 9,
+    "idx:term:glamorgan": 1,
+    "idx:term:todi": 1,
+    "idx:term:ku": 1,
+    "idx:term:bloque": 26,
+    "idx:term:alba": 1,
+    "idx:term:fight": 293
+  }
+}

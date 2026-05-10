@@ -1,0 +1,28 @@
+{
+  "chunk_size": 100,
+  "docs_processed": 87,
+  "chunks_indexed": 1631,
+  "tokens_total": 159317,
+  "elapsed_sec": 16.071,
+  "docs_per_sec": 5.41,
+  "chunks_per_sec": 101.48,
+  "tokens_per_sec": 9913.1,
+  "redis_used_memory_before": 1061872,
+  "redis_used_memory_after": 6339504,
+  "redis_index_size_bytes": 6171969,
+  "redis_index_size_mb": 5.886,
+  "num_terms": 5486,
+  "avg_postings_len": 20.49,
+  "sample_postings": {
+    "idx:term:ataqu": 4,
+    "idx:term:todi": 1,
+    "idx:term:glamorgan": 1,
+    "idx:term:plat": 4,
+    "idx:term:bloque": 21,
+    "idx:term:fight": 32,
+    "idx:term:victor": 1,
+    "idx:term:one": 267,
+    "idx:term:chippenham": 1,
+    "idx:term:trabzonspor": 8
+  }
+}
