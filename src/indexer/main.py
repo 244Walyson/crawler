@@ -1,10 +1,3 @@
-"""Phase 2 indexer entrypoint.
-
-Reads the Walyson dump (odds_data.json.zst) on the fly, runs the NLP
-pipeline (clean -> lang -> tokenize -> stem -> chunk) and writes an
-inverted index to Redis. Reports timing + memory metrics as JSON.
-"""
-
 from __future__ import annotations
 
 import argparse
