@@ -4,6 +4,7 @@ indexer   = "src.indexer.main:main"
 search    = "src.indexer.search:main"
 search-repl  = "src.indexer.repl:main"
 restore-index = "src.indexer.restore_index:main"
+search-web    = "src.indexer.server:main"
 
 [project]
 name = "crawler"
