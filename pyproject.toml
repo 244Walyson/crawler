@@ -1,3 +1,10 @@
+[project.scripts]
+crawler   = "src.main:main"
+indexer   = "src.indexer.main:main"
+search    = "src.indexer.search:main"
+search-repl  = "src.indexer.repl:main"
+restore-index = "src.indexer.restore_index:main"
+
 [project]
 name = "crawler"
 version = "0.1.0"

@@ -11,7 +11,7 @@ from src.config.logging import logger
 from src.config.settings import settings
 from src.indexer.chunker import chunk_tokens
 from src.indexer.cleaner import clean_html
-from src.indexer.corpus import DEFAULT_DUMP, iter_documents
+from src.indexer.corpus import DEFAULT_DUMP, iter_documents, iter_documents_mongo
 from src.indexer.inverted_index import index_doc
 from src.indexer.lang import detect_lang
 from src.indexer.metrics import (
@@ -33,6 +33,7 @@ async def run(
     flush: bool,
     metrics_out: Path | None,
     progress_every: int,
+    mongo_uri: str | None = None,
 ) -> RunMetrics:
     redis: Redis = Redis.from_url(redis_url)
     await redis.ping()
@@ -42,8 +43,13 @@ async def run(
     metrics = RunMetrics(chunk_size=chunk_size)
     metrics.redis_used_memory_before = await redis_used_memory(redis)
 
+    if mongo_uri:
+        doc_source = iter_documents_mongo(mongo_uri, limit=limit)
+    else:
+        doc_source = iter_documents(dump_path, limit=limit)
+
     with Timer() as t:
-        for doc in iter_documents(dump_path, limit=limit):
+        for doc in doc_source:
             doc_id = doc["_id"]
             url = doc["url"]
             html = doc["html"]
@@ -57,6 +63,16 @@ async def run(
                 continue
 
             chunks = chunk_tokens(stems, doc_id, chunk_size)
+
+            # Map each chunk to an approximate raw-text window
+            words = text.split()
+            ratio = len(words) / max(len(stems), 1)
+            raw_chunks: dict[str, str] = {}
+            for i, (cid, _) in enumerate(chunks):
+                w_start = int(i * chunk_size * ratio)
+                w_end = int((i + 1) * chunk_size * ratio)
+                raw_chunks[cid] = " ".join(words[w_start:w_end])
+
             await index_doc(
                 redis,
                 doc_id=doc_id,
@@ -64,6 +80,7 @@ async def run(
                 lang=lang,
                 chunks=chunks,
                 raw_text=text,
+                raw_chunks=raw_chunks,
             )
 
             metrics.docs_processed += 1
@@ -81,6 +98,10 @@ async def run(
     metrics.docs_per_sec = round(metrics.docs_processed / max(t.elapsed, 1e-9), 2)
     metrics.chunks_per_sec = round(metrics.chunks_indexed / max(t.elapsed, 1e-9), 2)
     metrics.tokens_per_sec = round(metrics.tokens_total / max(t.elapsed, 1e-9), 2)
+
+    # Store counters for BM25 scoring
+    await redis.set("idx:total_chunks", metrics.chunks_indexed)
+    await redis.set("idx:chunk_size", chunk_size)
 
     metrics.redis_used_memory_after = await redis_used_memory(redis)
     idx = await collect_index_metrics(redis)
@@ -111,6 +132,8 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     )
     p.add_argument("--metrics-out", type=Path, default=None)
     p.add_argument("--progress-every", type=int, default=200)
+    p.add_argument("--mongo", type=str, default=None, metavar="URI",
+                   help="Read corpus from MongoDB instead of dump file (e.g. mongodb://localhost:27017)")
     p.set_defaults(flush=True)
     return p.parse_args(argv)
 
@@ -126,6 +149,7 @@ def main(argv: list[str] | None = None) -> int:
             flush=args.flush,
             metrics_out=args.metrics_out,
             progress_every=args.progress_every,
+            mongo_uri=args.mongo,
         )
     )
     print(
