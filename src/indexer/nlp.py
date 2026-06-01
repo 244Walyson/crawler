@@ -49,3 +49,31 @@ def tokenize_and_stem(text: str, lang: str) -> list[str]:
     sw = SW_PT if lang == "pt" else SW_EN
     stem_fn = RSLP.stem if lang == "pt" else PORTER.stem
     return [stem_fn(t) for t in tokens if TOKEN_RE.match(t) and t not in sw]
+
+
+def tokenize_and_stem_bilingual(text: str) -> list[str]:
+    """Stem with both PT (RSLP) and EN (Porter), filtering stopwords from both languages."""
+    all_sw = SW_PT | SW_EN
+    tokens = [t.lower() for t in word_tokenize(text, language="english")]
+    clean = [t for t in tokens if TOKEN_RE.match(t) and t not in all_sw]
+    seen: set[str] = set()
+    result: list[str] = []
+    for t in clean:
+        for stem in (RSLP.stem(t), PORTER.stem(t)):
+            if stem not in seen:
+                seen.add(stem)
+                result.append(stem)
+    return result
+
+
+def content_words(text: str) -> list[str]:
+    """Return non-stopword tokens for highlighting (no stemming, both languages)."""
+    tokens = [t.lower() for t in word_tokenize(text, language="english")]
+    all_sw = SW_PT | SW_EN
+    seen: set[str] = set()
+    result: list[str] = []
+    for t in tokens:
+        if TOKEN_RE.match(t) and t not in all_sw and t not in seen:
+            seen.add(t)
+            result.append(t)
+    return result

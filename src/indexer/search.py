@@ -10,11 +10,17 @@ from rich.panel import Panel
 from rich.text import Text
 
 from src.config.settings import settings
-from src.indexer.lang import detect_lang
-from src.indexer.nlp import tokenize_and_stem
+from src.indexer.nlp import content_words, tokenize_and_stem_bilingual
 from src.indexer.ranking import bm25_score
 
 console = Console()
+
+
+def _dual_stem(query: str) -> tuple[list[str], list[str]]:
+    """Stem with both PT+EN (stopwords from both), return (stems, highlight_terms)."""
+    stems = tokenize_and_stem_bilingual(query) or [query.lower()]
+    highlight = content_words(query)
+    return stems, highlight
 
 
 async def search(
@@ -23,9 +29,8 @@ async def search(
     k: int,
     *,
     mode: str = "and",
-) -> tuple[list[dict], str]:
-    lang = detect_lang("https://example.en/", query)
-    stems = tokenize_and_stem(query, lang) or [query.lower()]
+) -> tuple[list[dict], str, list[str]]:
+    stems, highlight = _dual_stem(query)
     redis: Redis = Redis.from_url(redis_url, decode_responses=True)
     keys = [f"idx:term:{s}" for s in stems]
 
@@ -37,7 +42,6 @@ async def search(
             all_ids.update(await redis.smembers(key))
         chunk_ids = list(all_ids)
 
-    # Fallback: if AND found nothing, retry with OR
     if not chunk_ids and mode == "and":
         all_ids = set()
         for key in keys:
@@ -56,7 +60,7 @@ async def search(
         results.append(meta)
 
     await redis.aclose()
-    return results, mode
+    return results, mode, highlight
 
 
 def _snippet(meta: dict, max_len: int = 220) -> str:
@@ -113,7 +117,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
     q = " ".join(args.query)
-    results, mode = asyncio.run(search(q, args.redis_url, args.k, mode=args.mode))
+    results, mode, _ = asyncio.run(search(q, args.redis_url, args.k, mode=args.mode))
 
     if args.plain:
         print(f"query={q!r}  hits={len(results)}  mode={mode}")
